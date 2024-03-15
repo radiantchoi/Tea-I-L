@@ -50,7 +50,7 @@ class Myclass {
 ``` Swift
 exntesion MyClass {
     func closureBasedIncrement(_ input: Int, action: (Int) -> Int) -> Int {
-        return completion(input)
+        return action(input)
     }
     
     func useClosureHere(_ input: Int) -> Int {
@@ -90,4 +90,4 @@ exntesion MyClass {
   - 가독성
     - 데이터의 가공 흐름을 보고자 할 땐 함수형 프로그래밍 코드가 읽기 편한 면이 있다.
       - 절차적, 선언적 과정에 비해 코드의 양이 대체로 적다는 것도 장점.
-    - 하지만 객체 지향 코드도 네이밍 및 매직 넘버의 분리에 조금 더 신경 써 주면 읽기 좋은 코드륾 만들 수 있다. 
+    - 하지만 객체 지향 코드도 네이밍 및 매직 넘버의 분리에 조금 더 신경 써 주면 읽기 좋은 코드를 만들 수 있다. 

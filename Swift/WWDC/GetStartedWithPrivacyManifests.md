@@ -6,9 +6,9 @@ https://developer.apple.com/wwdc23/10060
 - 특히 타사 SDK에 의존하는 경우 유용할 것이다.
 
 ## Privacy Manifest
-- PrivacyInfo.xcprivacy 파일을 이용해서 SDK에도 프라이버스 매니페스트를 포함할 수 있다.
+- PrivacyInfo.xcprivacy 파일을 이용해서 SDK에도 Privacy Manifest를 포함할 수 있다.
 - 소스 코드 있는 그 폴더로 가서 만들자!
-- plist 파일로, 수집하는 데이터 타입과 사용 방법, 사용자와의 연결 여부, 추적에 어떻게 사용되는지 등을 선언
+- plist 파일로, 수집하는 데이터 타입과 사용 방법, 사용자와의 연결 여부, 추적에 어떻게 사용되는지 등을 기입해 둔다.
 
 ## Privacy Report
 - 앱 스토어에 제출할 앱을 빌드할 때, Xcode는 매니페스트를 싹 모으고, 요약하는 리포트를 작성한다.

@@ -34,7 +34,7 @@ thirdSet.formUnion(secondSet) // [2, 3, 4, 5]
 let subtractedSet = firstSet.subtracting(secondSet) // [1]
 ```
 - 합집합 연산 같은 일부 경우를 제외하면, 대부분의 집합 연산은 `mutating` 버전이 있고 아닌 버전이 있다.
-- `SetAlgebra`[프로토콜](https://developer.apple.com/documentation/swift/setalgebra)도 체크해보자!
+- `SetAlgebra` [프로토콜](https://developer.apple.com/documentation/swift/setalgebra)도 체크해보자!
 
 ## Using Sets inside Closures
 - 딕셔너리와 집합 모두 함수 안에서 쓰기 좋은 자료구조이다.

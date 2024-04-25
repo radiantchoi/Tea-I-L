@@ -148,3 +148,195 @@ extension String {
   - `nil`: 무언가가 없음
   - `Void`: 아무것도 없는 것이 있음
   - `Never`: 있어서는 안 될 것
+- `Never`는 `case`가 없는 열거형의 형태로 구현되어 있다.
+
+## Optional Chaining
+- Obj-C 상에서는 `nil`인 것에 메시지를 보내는 것은 작동하지 않는다. Swift 상에서는 어떨까?
+- 옵셔널 체이닝을 통해 같은 효과를 누릴 수 있다!
+```Swift
+// mark의 뇌가 있다면 그 무게를 출력
+print(mark.brain?.weight) // Optional(1320.0)
+```
+- ? 기호가 붙어 있는 것은 코드를 읽는 사람으로 하여금 이 코드가 작동하지 않을 수 있다는 확실한 메시지를 준다.
+- 이 코드의 결과는 옵셔널로 출력된다.
+- 또한 옵셔널 "체이닝"이기 때문에, 여러 번 걸어버릴 수도 있다.
+```Swift
+home?.guardian?.brain?.weight 
+```
+- 위 코드의 결과는 `Optional(Optional(Optional(Double)))`이 될 텐데, 이게 맞을까?
+- 옵셔널 체이닝은 flattening 동작을 수행한다.
+- 한편 옵셔널 체이닝은 subscript 과정에서도 적용될 수 있다.
+```Swift
+let users = ["Steam": [1, 2, 3, 4]-
+print(users["Steam"]?[2]) // Optional(3)
+
+// 당연히 옵셔널 함수를 사용할 때도 가능하다
+// 참고: 연산자를 함수로 취급할 땐 이렇게 써 줄 수도 있다는 거!
+let functions = ["add": (+), "subtract": (-)]
+print(functions["add"]?(1, 3) // Optional(4)
+```
+- 상기한 활용법은, 클래스가 이벤트 발생 시 콜백 함수의 결과값을 주인 객체에게 전달할 때 유용하다.
+```Swift
+// 이건 진짜 텍스트 필드에 있는 함수
+class TextField {
+  private(set) var text = ""
+  var didChange: ((String) -> ())?
+  
+  // 프레임워크 차원에서 호출한다
+  func textDidChange(newText: String) {
+    text = newText
+    didChange?(text)
+  }
+}
+
+class Box<T> {
+  private(set) var value: T
+  var listener: ((T) -> ())?
+  
+  init(value: T) {
+    self.value = value
+  }
+  
+  func subscribe(newValue: T) {
+    value = newValue
+    listener?(value)
+  }
+}
+```
+- 상기 코드의 `textDidChange`, `changeValue` 함수는 안에 콜백 함수를 가지고 있다. 또한 값이 바뀔 때마다 불려 오기도 하고.
+- 그런데 유저는 이 콜백을 초기화해 줄 필요는 없다. 왜냐면 옵셔널 값이니까, 기본값은 `nil`이기 때문.
+  - 옵셔널 `let` 말고 옵셔널 `var`은 따로 할당하지 않아도 `nil`이 할당된다.
+  - 옵셔널은 사용의 편의를 위해 "분명한 기본값"이라고 할 수 있는 `nil`이 있는 것이다. 다만 Swift 팀에서는 후회한다고(소근)
+
+### Optional Chaining and Assignments
+- 체인이 걸려 있는 옵셔널 값에도 다른 값을 할당할 수 있다!
+- 이 경우 `nil`이 아니라면! 값을 할당한다.
+  - 일반 프로퍼티는 아묻따 값을 할당하지만, 옵셔널 프로퍼티는 먼저 값이 있나 없나 체크한다는 것이다.
+  - `nil`이 뜨면 하던 모든 연산을 집어치운다는 것이 옵셔널 체이닝의 특징이니까.
+```Swift
+optionalCard?.value += 1
+```
+
+## The nil-Coalescing Operator
+- 옵셔널을 깔 때, `nil`을 특정한 기본값으로 지정하고 싶을 때 사용하는 오퍼레이터.
+```Swift
+// 여기서 ??가 바로 Coalescing Operator다.
+let message = readLine() ?? "No Message"
+
+// 삼항 연산자랑 비슷하다고 느낄 사람들을 위해
+let message = readLine() != nil ? readLine()! : "No Message"
+```
+- ?? 기호 뒤에 나오는 것이 기본값임을 한 눈에 알 수 있어서 좋다.
+- 조금 응용해보자면, 배열의 인덱스로 접근할 때, 배열의 크기를 넘는 인덱스를 조회하는 것은 옵셔널을 반환하지 않지만...
+```Swift
+let numbers = [1, 2, 3, 4]
+let fifth = numbers.count > 5 ? numbers[5] : 0 // 0
+
+extension Array {
+  subscript(guarded idx: Int) -> Element? {
+    guard (startIndex..<endIndex) ~= idx else {
+      return nil
+    }
+    
+    return self[idx]
+  }
+}
+
+let sixth = numbers[guarded: 6] ?? 0 // 0
+```
+- Coalescing Operator 역시 체이닝이 가능하다.
+```Swift
+let a: Int? = nil
+let b: Int? = nil
+let c: Int? = 34
+
+a ?? b ?? c ?? 0 // 34
+
+// 체이닝과 먼저 까는 것은 구분되어야 한다!!
+// 아래 예시는 Optional(Optional(String))의 경우.
+let firstString: String?? = nil
+let secondString: String?? = .some(nil)
+
+// 첫 번째 String은 inner 지점에서 nil이므로
+(firstString ?? "inner") ?? "outer" // inner
+
+// 두 번째 String은 일단 inner 지점에선 some이므로, 언래핑되어 안에 있던 값이 나온다.
+// outer 지점으로 나왔을 때 값이 nil이므로, 기본값을 대신 제공한다.
+(secondString ?? "inner") ?? "outer" // outer
+```
+
+## Using Optionals with String Interpolation
+- 옵셔널 값을 프린트하려고 하면 컴파일러가 노랑 오류를 뱉어내는 것을 본 적이 있을 것이다.
+  - `Warning: Expression implicity coerced from 'Int?' to Any.`
+- 출력 과정에서 값을 `String`으로 바꾸는 "문자열 보간(String Interpolation)"을 하면서 일어나는 현상.
+- 이렇게 하면 `nil`이 프린트되거나, `Optional(3)` 따위가 프린트되거나 할 텐데..
+- 문제는 유저가 보는 화면에는 "옵셔널" 이런 표현은 치워야 된다는 것이다.
+- 치우는 몇 가지 방법이 있긴 하다.
+  - `as Any`로 타입캐스팅하기
+  - 강제 언래핑하기
+  - `String(describing:)` 활용하기
+  - 기본값 제공하기: 가장 바람직! 다만, 연산자 좌, 우의 타입이 같아야 한다. Swift 언어는 타입 미스매치를 용납하지 않는다!
+    - 그런데 도대체 common type을 찾을 수 없는 경우는 어떻게 해야 할까? 직접 만들어 보자.
+```Swift
+// 왼쪽 값이 nil이면 오른쪽의 String 기본값을 반환하는 오퍼레이터
+infix operator ???: NilCoalescingPrecedence
+
+// @autoclosure를 사용하는 이유는, 여기는 진짜 필요할 때만 불러올거라는 표시다.
+// 말하자면 연산을 지연시키는 것.
+// Functions 파트에서 자세히 다룬다.
+public func ???<T>(optional: T?, defaultValue: @autoclosure () -> String) -> String {
+  switch optional {
+  case let value?: 
+    return String(describing: value)
+  case nil:
+    return defaultValue()
+  }
+}
+```
+
+## Optional Map
+- 옵셔널을 받고, `nil`이 아닌 값을 변환한다~
+- 옵셔널에도 `map` 함수가 있어서 이런 역할을 수행한다. `Sequences`에 있는 그것과 굉장히 유사하다.
+- 하지만! 옵셔널을 대상으로 하는 맵 함수는 단 하나의 값에서만 작동한다.
+```Swift
+let message = "Hello World!"
+let firstCharacter = message.first.map { String($0) } // Optional("H")
+```
+- 결과를 옵셔널로 원할 때 유용하다.
+```Swift 
+extension Array {
+  func reduce(_ nextPartialResult: (Element, Element) -> Element) -> Element? {
+    guard let f = first else { return nil }
+    
+    return dropFirst().reduce(f, nextPartialResult)
+  }
+}
+
+[1, 2, 3, 4].reduce(+) // Optional(10)
+```
+
+## Optional FlatMap
+- 배열에 맵을 하면서, 변환 함수는 배열을 반환하지만, 진짜 결과는 배열의 배열이 아닌 그냥 배열로 돌려받고 싶을 때가 항상 있다.
+- 옵셔널에서도, 맵을 하고 싶은데 변환 함수가 옵셔널이라면 `Optional(Optional(Element))` 타입이 나오는 꼴이 보기 싫을 수도.
+- `flatMap`을 사용하면 한 번만 옵셔널로 감싸진 값을 반환한다!
+- 그런데 사실 이러한 연산은 여러 대체재가 있다.
+  - 앞에서 알아본 `if let`으로 여러 개의 변수/상수 만들기
+  - 옵셔널 체이닝
+```Swift
+let urlString = "https://objc.io/logo.png"
+let view = URL(string: urlString)
+  .flatMap { try? Data(contentsOf: $0) }
+  .flatMap { UIImage(data: $0) }
+  .map { UIImageView(image: $0) }
+
+if let view = view {
+  PlaygroundPage.current.liveView = view
+}
+
+// 체이닝 및 if let과 유사한 대목
+i?.advance(by: 1)
+i.flatMap { $0.advance(by: 1) }
+if let i {
+  i.advance(by: 1)
+}
+```

@@ -340,3 +340,175 @@ if let i {
   i.advance(by: 1)
 }
 ```
+
+## Filtering out nils with compactMap
+- 만약 컬렉션 안에 `nil`이 있는데, 신경쓰기 싫다면..!
+```Swift
+let probablyNumbers = ["1", "2", "three", "4"]
+
+// compactMap을 모르는 우리는 이렇게 했겠지만
+var gross = 0
+for case let i? in numbers.map { Int($0) } {
+    gross += i
+}
+print(gross) // 7
+
+// 또는 이렇게 했겠지만
+let coalescingSum = probablyNumbers.map { Int($0) }.reduce(0) { $0 + ($1 ?? 0) }
+print(coalescingSum) // 7
+
+// 이제는 이렇게 할 수 있다
+let compactSum = probablyNumbers.compactMap { Int($0) }.reduce(0, +)
+print(sum) // 7
+```
+- `compactMap`을 직접 구현해볼 수 있다. 예시에서는 먼저 배열을 순회한 다음 `nil`이 아닌 것만 반환한다.
+  - 이 때 퍼포먼스를 위해 `lazy`하게 배열을 생성한다.
+```Swift
+extension Sequence {
+  func compactMap<B>(_ transform: (Element) -> B?) -> [B] {
+    return lazy.map(transform).filter { $0 != nil }.map { $0! }
+  }
+}  
+```
+- 뭐 원래 Collection stdlib 안에서는 이런 짓을 안 하긴 하지만.
+
+## Equating Optionals
+- 값이 `nil`이든 아니든 신경 안 쓰는데, 아무튼 같은지 아닌지 해야 할 경우.
+- `Optional`은 `Equatable`하다! 단, 감싸고 있는 값도 `Equatable`할 경우에만.
+```Swift
+extension Equatable where Wrapped: Equatable {
+  static func ==(lhs: Wrapped?, rhs: Wrapped?) -> Bool {
+    switch lhs, rhs {
+    case (nil, nil): return true
+    case let (x?, y?): return x == y
+    case (_?, nil), (nil, _?): return false
+    }
+  }
+}
+```
+- `Optional`을 비교할 땐 위와 같은 네 가지 케이스가 있다. 각각에 대해 처리해 주면 된다.
+- 한편 옵셔널이 아닌 값과 옵셔널을 비교하고자 한다면, 옵셔널이 아닌 값을 자동으로 옵셔널로 감싸서 타입 매칭을 한다.
+  - 이게 아니었으면 위의 네 가지 케이스를 전부 따로따로 구현해야 했을걸?
+- Swift 코드는 전반적으로 이러한 암시적 변환에 의존한다..!
+- 한편 딕셔너리를 사용하면서 이런 옵셔널 값을 사용하는 것은 조심해야 할 수도 있다!
+  - 딕셔너리에서 `value` 부분에 `nil`이 들어간다는 것은 해당 키를 삭제한다는 것과 같기 때문.
+```Swift 
+var exampleDict: [String: Int?] = ["one": 1, "two": 2]
+
+// 이렇게 하면 키 two가 없어진다
+exampleDict["two"] = nil
+
+// 구태여 nil값을 넣고 싶다면 이렇게 하자
+exampleDict["two"] = .some(nil)
+exampleDict["two"] = Optional(nil)
+exampleDict["two"]? = nil
+```
+
+## Comparing Optionals
+- `Equatable`하니까.. 당연히 비교도 할 것.
+- `nil`이랑 값이 있는 경우를 비교했을 때만 짚고 넘어가자면! `.some`이 더 큰 값으로 판정한다.
+
+# When to Force-Unwrap
+- 상술한 모든 방법은 옵셔널을 깔끔하게 언래핑하기 위한 과정이다.
+- 그럼 강제 언래핑은 언제 해야 할까? 여러 의견이 있지만, 이 책에서 제시하는 의견은 다음과 같다.
+  - 값이 `nil`이 아닌 것이 매우 자명하고, 만약 `nil`일 경우 프로그램을 크래쉬시키고 싶을 경우에 사용하면 된다.
+- 위에서 정의한 `compactMap` 예시를 가져오면..
+```Swift
+extension Sequence {
+  func compactMap<B>(_ transform: (Element) -> B?) -> [B] {
+    return lazy.map(transform).filter { $0 != nil }.map { $0! }
+  }
+}  
+```
+- 위 예시에서는 마지막 `map`에 강제 언래핑이 되어 있다.
+- 논리적으로, 이전 부분에서 `nil`을 모두 걸러냈기 때문에, 저 부분에서는 값이 없을 수가 없기 때문이다.
+- 물론 이런 경우는 매우 드문 경우. 대부분의 경우는 강제 언래핑보다 더 좋은 선택지가 있다.
+```Swift
+let ages = ["Gordon": 30, "Greg": 28]
+
+// 강제 언래핑을 써도 값이 있음이 보장되는 경우. 딕셔너리의 키 배열은 당연히 해당하는 값이 있다.
+let forceNames = ages.keys.filter { name in ages[name]! >= 30 } // ["Gordon"]
+
+// 다만 이 경우에도 강제 언래핑을 쓰지 않을 수 있다.
+ages.filter { (_, age) in age >= 30 }
+  .map { (name, _) in name }
+// [Gordon]
+// 딕셔너리는 키와 값의 시퀀스기 때문에, 이런 식으로 나타낼 수 있다!
+```
+- 뭐 그렇긴 해도, 이론적으로 불가능한 상황을 커버하기 위해 관련 없는 방법을 사용하면서 언래핑하기보다 강제 언래핑을 쓰는 게 좋을 수도 있다는 말.
+- "Prevent sweeping theoretically impossible situation under the carpet"
+
+## Improving force-unwrap Error Messages
+- 강제 언래핑은 했으되, 왜 프로그램을 크래쉬 시켰는지 메시지를 던져 주면 더 좋을 것 같다.
+```Swift
+infix operator !!
+
+func !!<T>(wrapped: T?, failureText: @autoclosure () -> String) -> T {
+  if let x = wrapped { return x }
+  fatalError(failureText())
+}
+```
+- cf. [공식 문서](https://docs.swift.org/swift-book/documentation/the-swift-programming-language/advancedoperators/)
+  - 커스텀 오퍼레이터를 정의하고 싶다면 `infix`를 붙여 줘야 한다.
+- 실제로 사용해보자!
+```Swift
+let wannaBeInt = "Two"
+let number = Int(wannaBeInt) !! "Expecting Int, got \(wannaBeInt)"
+```
+
+## Asserting in Debug builds
+- 아무리 그래도 릴리즈 빌드에서 앱을 크래쉬 내는 것은.. 매우 "용감한" 행동이지.
+- 그래서 디버그/테스트 빌드에서만 검증하고, 실제 프로덕트에서는 기본값을 제공하고 싶을 수 있다.
+- `assert` 메서드는 디버그/테스트 환경에서만 작동해서, 값을 비교하고 다르면 크래쉬시키니까 이를 충족시켜줄 수 있다.
+```Swift
+infix operator !?
+
+func !?<T: ExpressibleByIntegerLiteral>(wrapped: T?, failureText: @autoclosure () -> String) -> T {
+  assert(wrapped != nil, failureText())
+  return wrapped ?? 0
+}
+```
+- 위 경우는 Integer Literal 한정으로 쓸 수 있지만, Array Literal 혹은 String Literal 등 여러 가지 오버로딩을 통해 써볼 수 있다.
+- 이를 위시해서, 프로그램의 실행을 멈출 수 있는 수단은 크게 세 가지가 있다.
+  - `fatalError`: 메시지를 로그에 찍고 바로 프로그램을 멈춰 버린다.
+  - `assert`: 특정 상태와 지금 상태를 비교하고, 일치하지 않을 경우(`false`인 경우) 프로그램을 멈춘다. Release 빌드에서 제거된다.
+  - `precondition`: `assert`와 같은데, 릴리즈 빌드에서도 제거되지 않는다.
+
+# Implicitly Unwrapped Optionals
+- 암시적 언래핑 타입. 대표적으로 `UIKit`과 Storyboard 혹은 xib 사용 시 볼 수 있다.
+```Swift
+final class MyViewController {
+  @IBOutlet private lazy var helloLabel: UILabel!
+}
+```
+- 아니 그럼 어차피 옵셔널이어선 안 되는데, 도대체 왜 이렇게 쓰는 걸까?
+- 첫 번째 이유! Obj-C 코드와 연동해야 할 경우 임시적으로 이렇게 할 수 있다. 
+  - Obj-C는 옵셔널처럼 null 처리가 세심히 되어 있지 않다.
+  - 혹은 Swift 스타일 표현이 먹히지 않는 C 라이브러리에 접근해야 할 경우. 똑같다.
+  - Obj-C 라이프 사이클 상에서는 참조가 nullable하다는 것을 나타낼 방법이 없다. 하지만 몇몇 Obj-C API는 null 참조를 반환한다(?!).
+  - 당연히 이런 이유기 때문에 순수 Swift API 코드에서는 암시적 언래핑 옵셔널이 나오면 안 된다.
+- 두 번째 이유! 아주아주 짧은 시간동안만 값이 `nil`인 경우 이렇게 할 수 있다.
+  - 대표적인 예시가 상술한 UIKit View Controller.
+  - 뷰 컨트롤러는 그 뷰를 lazy하게 만든다. 
+    - loadView 시점과 viewDidLoad 시점 사이 짧은 시간에 nil인 자식 뷰가 있을 수 있다.
+    - 심지어 본인의 view 프로퍼티도 nil이다..
+
+## Implicit Optional Behavior
+- 암시적 언래핑 옵셔널들이 옵셔널 아닌 것처럼 쓰이긴 하지만, 안전한 핸들링을 위해 지금껏 사용하던 옵셔널 언래핑 기술을 사용할 수 있다.
+```Swift
+let s: String! = "Hello"
+s?.isEmpty // Optional(false)
+
+if let s {
+  print(s) // Hello
+}
+
+s = nil
+s ?? "Goodbye" // Goodbye
+```
+
+# Recap
+- 옵셔널은 안전한 코드를 위한 Swift의 가장 큰 기능 중 하나이다.
+- 대개의 개발 언어가 `null` 혹은 `nil`이 있다만, 대개의 개발 언어는 "`nil`이 아니다"로 값을 정의할 수단이 없다.
+  - 또는 `null`이 아님을 보장하기 위해 개발자가 기본값을 제공하도록 강요하기도 하고..
+- 그러니까, 음.. 잘 활용해보자..!

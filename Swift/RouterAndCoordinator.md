@@ -104,9 +104,6 @@ protocol Coordinator: AnyObject {
 // 언어에 따라 적용하는 자식 뷰를 다르게 할 수도 있다.
 // window 프로퍼티가 아닌 navigation controller 프로퍼티를 가질 수도 있다.
 // 필요하다면 화면 간의 분기 처리도 할 수 있다!
-protocol Coordinator {
-    func start()
-}
 
 class AppCoordinator: Coordinator {
     let window: UIWindow

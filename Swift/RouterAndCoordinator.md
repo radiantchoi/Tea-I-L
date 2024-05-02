@@ -4,7 +4,7 @@
 - 간단히 말하면, 요청하는 부분과 요청을 처리하는 부분을 분리하는 패턴.
 - 예를 들면, UI상에서 받아들이는 클라이언트 요청은 그 자체로 어떤 효과를 일으키지 않고, 적절한 핸들러로 이관되어 수행된다.
 
-### Router pattern을 활용한 네트워크 통신
+### Router Pattern을 활용한 네트워크 통신
 ```Swift
 enum APIRouter {
     case getUsers

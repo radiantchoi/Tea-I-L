@@ -100,7 +100,7 @@ struct SomethingUsefulSwiftUIApp: App {
 // 나머지는 거의 위의 코드를 복붙해야 하는데, 하나 추가해야 하는 것이 있다.
 // AppDelegate는 이미 정의했다고 가정하고
 extension AppDelegate {
-        func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
             Messaging.messaging().apnsToken = deviceToken
     }
 }

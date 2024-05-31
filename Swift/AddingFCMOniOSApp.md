@@ -119,8 +119,54 @@ extension AppDelegate {
 - 테스트 버튼을 누르면 응답이 온다!
 
 ### Postman
-- TBA
+- Postman에서 테스트하기 위해서는 몇 가지 사전 준비가 필요하다.
+- 먼저 didReceiveRegistrationToken 메서드를 구현한 다음, fcmToken 값을 기록해 둔다.
+    - 이 메서드는 MessagingDelegate를 채택한 다음 구현한다.
+    - 일정 주기마다 갱신되므로, 만약 유효하지 않다면 다시 앱을 빌드해서 실행시킨 후 가져올 것!
+- 다음으로 Postman에서 POST 요청을 준비한다.
+    - url은 https://fcm.googleapis.com/fcm/send
+    - Header의 Authorization 키에 key={서버 키} 값을 할당한다.
+        - 서버 키는 Firebase 콘솔 -> 프로젝트 설정 -> 클라우드 메시징 -> Cloud Messaging API(기존) 탭에서 받아올 수 있다. 만약 사용 설정이 되어 있지 않다면 사용하도록 해 준다.
+        - 만약 헤더에 자동으로 들어가 있지 않다면, Content-Type 키에 application/json 값도 할당한다.
+    - Body를 raw JSON으로 세팅해 주고 아래와 같은 값을 입력한다.
+``` json
+{
+    "to":"{아까 받아온 fcm 토큰}",
+    "notification":{
+        "title":"{푸시 메시지 제목}",
+        "body":"{푸시 메시지 내용}"
+    },
+    "data":{
+        // 임의의 값. 아래에서 설명
+        "linkId": "607",
+        "info": "3",
+        "type": "16"
+    }
+}
+```
+- 이러면 이제 메시지가 온다.
 
 ## 메시지 해석, 파싱 및 적용
-- TBA
-- 이후 사진 자료도 추가할 예정
+- 위와 같은 메시지를 날렸을 때, didReceive 메서드에서 받는 userInfo의 형식은 다음과 같다.
+``` json
+[
+	"google.c.fid": String,
+	"google.c.sender.id": String,
+	"gcm.message_id": String,
+	"linkId": String,
+	"info": String,
+	"type": String,
+	"google.c.a.e": String,
+	"aps": {
+		alert = {
+			body = "\(알람에 뜰 내용)";
+			title = 알람 제목;
+		};
+	}
+]
+```
+- notification 필드에 있는 내용이 자동으로 aps 키의 값으로 들어간다.
+- 이외에 linkId, info, type 등 원하는 정보를 전송할 수 있다.
+- 어떤 원하는 정보를 전송할지는, 푸시 메시지의 data 항목에서 정하는 Key에 따라 결정된다.
+    - 위의 예시에서 data 키 안에 들어 있는 linkId, info, type 등의 키가 그대로 userInfo 딕셔너리에서 키로 작동함을 볼 수 있다. 
+- data 항목에서 어떤 데이터가 왔느냐에 따라 이제 분기 처리를 할 수 있는 것.

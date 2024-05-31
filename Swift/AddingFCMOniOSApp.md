@@ -137,7 +137,6 @@ extension AppDelegate {
         "body":"{푸시 메시지 내용}"
     },
     "data":{
-        // 임의의 값. 아래에서 설명
         "linkId": "607",
         "info": "3",
         "type": "16"
@@ -148,19 +147,19 @@ extension AppDelegate {
 
 ## 메시지 해석, 파싱 및 적용
 - 위와 같은 메시지를 날렸을 때, didReceive 메서드에서 받는 userInfo의 형식은 다음과 같다.
-``` json
+```
 [
-	"google.c.fid": String,
-	"google.c.sender.id": String,
-	"gcm.message_id": String,
-	"linkId": String,
-	"info": String,
-	"type": String,
-	"google.c.a.e": String,
+	"google.c.fid": "{일단 신경쓰지 않아도 되는 값}",
+	"google.c.sender.id": "{일단 신경쓰지 않아도 되는 값}",
+	"gcm.message_id": "{일단 신경쓰지 않아도 되는 값}",
+	"linkId": "607",
+	"info": "3",
+	"type": "16",
+	"google.c.a.e": "{일단 신경쓰지 않아도 되는 값}",
 	"aps": {
 		alert = {
-			body = "\(알람에 뜰 내용)";
-			title = 알람 제목;
+			body = "{푸시 메세지 내용}";
+			title = {푸시 메세지 제목};
 		};
 	}
 ]

@@ -169,3 +169,8 @@ extension AppDelegate {
 - 어떤 원하는 정보를 전송할지는, 푸시 메시지의 data 항목에서 정하는 Key에 따라 결정된다.
     - 위의 예시에서 data 키 안에 들어 있는 linkId, info, type 등의 키가 그대로 userInfo 딕셔너리에서 키로 작동함을 볼 수 있다. 
 - data 항목에서 어떤 데이터가 왔느냐에 따라 이제 분기 처리를 할 수 있는 것.
+
+## References
+- https://firebase.google.com/docs/cloud-messaging/ios/client?hl=ko
+- https://dokit.tistory.com/49
+- https://nsios.tistory.com/191

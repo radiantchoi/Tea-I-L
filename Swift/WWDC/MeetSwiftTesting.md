@@ -56,7 +56,7 @@ let method = try #require(paymentMethods.first)
 @Test(.tags(.critical)) // 태그 달기
 @Test(.enabled(if: server.isOnline)) // 런타임 조건 달기
 @Test(.disabled("Broken")) // 테스트가 실패 혹은 비정상 종료되었을 때를 위한 설명
-@Test(//...) @available(macOS 15, *)
+@Test({내용}) @available(macOS 15, *)
 @Test(timeLimit(.minutes(3)))
 @Suite(.serialized) // 병렬 차리 없이 하나씩 여러 테스트 돌리기
 ```

@@ -4,7 +4,7 @@ https://medium.engineering/how-the-medium-ios-team-works-effectively-with-legacy
 - 도대체 왜 얘네는 2013, 14년 코드를 아직도 안 갈아엎고 있나? 생각하는 사람이 있다.
 - 사실 Medium iOS 팀에게는 이게 훈장 같은 건데, 하술
 
-## Working errectively with legacy code
+## Working effectively with legacy code
 - 2004년 책. 실전적 엔지니어가 되고 싶다면 일독을 권한다.
 - 리팩토링의 이론적 면모, 그리고 실전 케이스에 대해 논한다.
 - 현대 iOS 개발에서 더 이상 통용되지 않는 레거시 코드, 분명 우리도 갖고 있다!
@@ -58,7 +58,7 @@ https://medium.engineering/how-the-medium-ios-team-works-effectively-with-legacy
 - 기존의 코드에서 책임을 발견하고 뽑아냈을 때, 앞으로 리팩토링할 방향성을 제시받을 수 있었고, 이 과정에서 변경사항이 기존 레거시에 미칠 영향에 대해 크게 고민할 필요가 없었다.
     - 책임의 분리를 통해 어쨌든 그럴 가능성이 없어졌기 때문.
 
-### 내가 코드를 조지고 있는지 아닌지 어떻게 알지?
+### 내가 코드를 터뜨리고 있는지 아닌지 어떻게 알지?
 - 우리가 고치고자 하는 레거시 코드가 각기 다른 많은 유즈케이스에서 엄청나게 많이 쓰이고 있다면?
     - 특히 의존성 측면에서 이러는 경우가 많다.
 - 몇 달 전 Cocoapods 사용을 중단하고자 할 때 이런 일이 생겼다.

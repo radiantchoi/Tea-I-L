@@ -233,11 +233,11 @@ func == <each Element: Equatable>(
     lhs: (repeat each Element),
     rhs: (repeat each Element)
 ) -> Bool {
-  for (left, right) in repeat (each lhs, each rhs) {
-    guard left == right else { return false }
-  }
+    for (left, right) in repeat (each lhs, each rhs) {
+        guard left == right else { return false }
+    }
   
-  return true
+    return true
 }
 ```
 ### `Equatable`, `Hashable`, `Comparable`한 튜플

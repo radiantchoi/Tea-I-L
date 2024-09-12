@@ -266,7 +266,7 @@ struct ContentView: View {
 [1, 2, 3, 4, 5].filter { $0 % 2 == 0 }.count // 2
 
 // after
-[1, 2, 3, 4, 5].count(where: { $0 % 2 == 0}) // 2
+[1, 2, 3, 4, 5].count(where: { $0 % 2 == 0 }) // 2
 ```
 
 ### 128비트 정수 타입

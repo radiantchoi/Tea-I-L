@@ -239,4 +239,173 @@ score1.pretty // 002 - 001
 - 아니면 `numberFormatter`를 별도로 정의하던지.
 - 위에 나온 포매터 프로퍼티를 private하게 만드는 방법도 있긴 할건데, 완전한 방법은 아니다.
 - 구조체 안에 참조를 넣는 것은 그래서 매우 경계되어야 한다. 예기치 못한 동작이 일어날 수 있다.
-- 하지만 가끔, 참조를 저장하는 것이 진짜 필요하고 의도된 경우가 있다. 그런 경우를 위한 기법은~
+- 하지만 가끔, 참조를 저장하는 것이 진짜 필요하고 의도된 경우가 있다. 예를 들면~
+
+# Copy-On-Write Optimization
+- 값 타입은 복사가 굉장히 많이 이루어진다.
+- 그렇다면 복사를 굳이 하지 않아도 될 때는 복사하지 않는 방법이 있지 않을까?
+- 이럴 때 사용되는 최적화 기법이 바로 Copy On Write!
+- 특히 큰 데이터를 가질 수 있는 타입에서 유용하다. `Collection` 타입이라던지.
+- 핵심은, (복사) 초기 상태에는 구조체에 들어 있는 데이터를 여러 변수가 공유한다는 것이다.
+    - 이후 일부 변수에서 값의 변화가 일어나면 그제서야 값을 복사해서 다른 메모리 버퍼에 할당한다.
+    - 이는 곧, 여러 변수에서의 변경이 독립적이라는 이야기도 된다.
+- COW는 직접 구현해야 하지만, 대부분의 경우 그럴 일은 없다.
+    - 대개 많은 데이터를 갖는 건 `Collection`이고, Swift는 이미 이들에 대한 COW를 잘 구현해 두었기 때문.
+
+## Copy-On-Write Tradeoffs
+- 내부 구현에 대해 탐구하기 전! COW의 트레이드오프부터 알아보자.
+- 통상적인 값 타입과 달리, COW 구조체는 내부적으로 참조를 사용한다.
+    - 이 때문에 COW 구조체가 변수에 복사되면 참조 카운트가 늘어난다.
+    - 상술한 "참조를 저장하는 것이 진짜 필요하고 의도된 경우".
+- 참조 카운트를 올렸다 내렸다 하는 건 의외로 꽤 느린 작업이다.
+    - 스레드-세이프해야만 하는 작업이고, 락 등의 오버헤드가 그에 따라 발생한다.
+- 이는 또한 COW 구조체를 프로퍼티로 가진 타입에도 적용되는 문제이다.
+    - SwiftNIO 프로젝트의 예시. HTTP Request와 같은 타입은, 하다못해 `String`을 많이 가지고 있고, 그에 따라 이러한 오버헤드가 엄청나게 발생한다.
+    - Request를 함수의 파라미터로 넘긴다면? (끔찍)
+
+## Implementing Copy-On-Write
+- 위에서 말한 예시를 아주 간략하게 만들어서 시작해 볼까?
+```Swift
+struct HTTPRequest {
+    // 1. 원래 상태. 생략된 프로퍼티들도 대개 Collection 타입이므로 오버헤드가 엄청나다
+    var path: String
+    var headers: [String: String]
+    // 생략된 다른 프로퍼티들...
+
+    // 참조 카운팅 오버헤드부터 줄여 보자
+    fileprivate class Storage {
+        var path: String
+        var headers: String
+
+        init(path: String, headers: [String: String]) {
+            self.path = path
+            self.headers = headers
+        }
+    }
+
+    // 2. HTTPRequest가 갖는 참조는 이제 storage 하나밖에 없게 됐다
+    private var storage: Storage
+
+    init(path: String, headers: [String: String]) {
+        storage = Storage(path: path, headers: headers)
+    }
+}
+
+// 3. path와 headers를 노출하기 위한 연산 프로퍼티
+// 4. COW처럼 작동하게 하려면 path 혹은 headers가 바뀌었을 때마다 값을 새로 할당한다
+extension HTTPRequest {
+    var path: String {
+        get { storage.path }
+        set { 
+            storage = storage.copy()
+            storage.path = newValue
+        }
+    }
+
+    var headers: [String: String] {
+        get { storage.headers }
+        set {
+            storage = storage.copy()
+            storage.headers = newValue
+        }
+    }
+}
+
+// 테스트용 print 오버로딩
+var printedLines = [String]()
+func print(_ value: Any) {
+    var output = ""
+    Swift.print(value, terminator: "", to: &output)
+    printedLines.append(output)
+    Swift.print(output)
+}
+
+extension HTTPRequest.Storage {
+    func copy() {
+        print("Making a copy...")
+        return HTTPRequest.Storage(path: path, headers: headers)
+    }
+}
+
+// 지금까지의 구현으로는 인스턴스가 하나일 때도 mutation만 일어나면 복사본이 생성된다.
+// 이를 해결하기 위해 객체 참조 카운트가 하나인지 알아야 할 필요가 있다.
+// 오우너가 하나라면 그 자리에서 변경하고, 둘 이상이면 일단 복사 후 변경하는 것
+
+// 5. isKnownUniquelyReferenced의 활용
+extension HTTPRequest {
+    private var storageForWriting: HTTPRequest.Storage {
+        mutating get {
+            if !isKnownUniquelyReferences(&storage) {
+                self.storage = storage.copy()
+            }
+
+            return storage
+        }
+    }
+
+    // path, headers 연산 프로퍼티의 재작성
+    var path: String {
+        get { storage.path }
+        set { storageForWriting.path = newValue }
+    }
+
+    var headers: [String: String] {
+        get { storage.headers }
+        set { storageForWriting.headers = newValue }
+    }
+}
+
+// isKnownUniquelyReferenced에 전달하는 클래스에 다른 스레드가 접근하지 않음을 보장해야 한다.
+// Race Condition 발생 우려가 있음..
+// 이는 모든 inout 파라미터에서 주의할 점인데, Swift 함수에서는 inout 없이는 컴파일러가 값을 "복사"하기 때문에 어쩔 수 없다.
+// 복사된 객체는 함수 바디 안에서 참조가 1 늘어나니까, 절대 true가 반환될 수 없는 셈.
+// 또한 Obj-C 클래스는 인자로 넘길 수 없다.
+```
+
+## `willSet` Defeats Copy-On-Write
+- 사실 COW 타입 프로퍼티의 `willSet` 옵저버가 이 모든 구현을 쓸모없게 한다는 사실(...)
+- `newValue`라는 임시 프로퍼티를 바디 안에 갖고 있어서, 컴파일러로 하여금 임시 복사본을 만들게 하기 때문.
+- 결과적으로, 해당 값은 더 이상 유니크하게 참조되지 않게 되며, 모든 mutation이 그 복사본을 만들게 한다.
+```Swift
+struct Wrapper {
+    var req = HTTPRequest(path: "/", headers: [:])
+    var reqWithWillSet = HTTPRequest(path: "/", headers: [:]) {
+        willSet {
+            print("willSet")
+        }
+    }
+    var reqWithDidSet = HTTPRequest(path: "/", headers: [:]) {
+        didSet {
+            print("didSet")
+        }
+    }
+}
+
+var wrapper = Wrapper()
+wrapper.req.path = "/about"
+// 재미있게도, didSet에서는 이러한 현상이 일어나지 않는다.
+wrapper.reqWithDidSet.path = "/forum" // didSet
+
+wrapper.willSet.path = "/blog"
+// Making a copy...
+// willSet
+```
+- `willSet`의 호출 과정을 되짚어보면..
+    - 현재 값의 복사본이 만들어진다.
+    - 복사본이 변경된다.
+    - `willSet` 호출시 그 바디 안에서 이 복사본은 `newValue`라는 이름이 붙는다
+    - 그리고 이 복사본이 원본에 반영된다.
+- 그런데 `didSet`도 `oldValue`라는 이름으로 이전 값에 액세스 가능한데, 왜 안 불려오나?
+    - 컴파일러가 `oldValue`가 쓰이지 않았음을 코드 상에서 감지했기 때문이다.
+    - `willSet`의 `newValue`에 대해서는 이 감지가 동작하지 않는다.
+- 한편으로는 이해할 수 있는 것이, 만약 `newValue` 유무에 따라 컴파일이 다르게 된다면..
+    - 변경 "이전에" 어떤 로직을 실행하는 `willSet` 블록이 만들어진다. (현재의 `willSet`은 어쨌든 일종의 변경 이후)
+    - 변경의 사이드 이펙트가 일어나기 이전에 `willSet`에 들어 있는 어떤 사이드 이펙트가 실행될테고..
+    - 지금 상태는 어쨌든, `willSet` 이전에 사이드 이펙트가 일어나게끔 보장이 되어 있으니까.
+- 이러한 `willSet`의 동작 방식은 SwiftUI 사용시에 퍼포먼스 문제를 일으킬 수 있다.
+    - 다름아닌 `ObservedObject` 내부의 `@Published`가 내부적으로 `willSet`을 활용하기 때문.
+
+# Recap
+- 값 타입과 참조 타입의 근본적인 작동방식 차이에 대해 논했다.
+- `let`, `var`, `mutating`, `inout`에 대해 논했다.
+- Copy-On-Write에 대해 논했다.

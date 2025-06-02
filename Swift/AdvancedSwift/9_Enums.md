@@ -410,3 +410,265 @@ typealias State2 = Result<[Message], Error>?
     - 불가능한 상태를 막고, 앱의 모든 가능한 상태를 하나의 변수로 컨트롤할 수 있다.
     - 이를 통해 잠재적인 에러를 크게 줄일 수 있다.
     - 또한 상태(기능)의 추가는, 모든 `switch`문을 업데이트하도록 강요함으로서, 빼먹는 부분 없이 업데이트도 할 수 있게 한다.
+
+## Choosing between Enums and Structs
+- 열거형과 구조체의 차이를 다시 생각해보면..
+    - 열거형은 가능한 케이스 중 오직 하나만 표시한다.
+    - 구조체는 가지고 있는 모든 프로퍼티의 상태를 표시한다.
+- 이런 차이에도 불구하고, 열거형과 구조체 둘 다 해결할 수 있는 문제가 있다.
+- 분석을 위한 자료를 만든다고 했을 때..
+```swift
+// 열거형으로 정의했을 때
+enum AnalyticsEvent {
+    case loginFailed(reason: LoginFailureReason)
+    case loginSucceeded
+    // ...
+}
+
+// 실제 사용하는 값들을 위한 확장
+extension AnalyticsEvent {
+    var name: String {
+        switch self {
+        case .loginSucceeded:
+            return "loginSucceeded"
+        case .loginFailed:
+            return "loginFailed"
+        }
+    }
+
+    var metadata: [String: String] {
+        switch self {
+        case .loginSucceeded:
+            return [:]
+        case .loginFailed(let reason):
+            return ["reason": String(describing: reason)]
+        }
+    }
+}
+
+// 구조체로 정의했을 때
+struct AnalyticsEvent {
+    let name: String
+    let metadata: [String: String]
+
+    // private init이므로 함부로 초기화할 수 없다.
+    private init(name: String, metadata: [String: String] = [:]) {
+        self.name = name
+        self.metadata = metadata
+    }
+
+    // 열거형의 실패 케이스와 비슷하게 작동한다.
+    static func loginFailed(reason: LoginFailureReason) -> AnalyticsEvent {
+        return AnalyticsEvent(
+            name: "loginFailed",
+            metadata: ["reason": String(describing: reason)]
+        )
+    }
+
+    // 열거형의 성공 케이스와 비슷하게 작동한다.
+    static let loginSucceeded = AnalyticsEvent(name: "loginSucceeded")
+}
+```
+- 그럼에도 불구하고 열거형이냐 구조체냐는 사뭇 다른 면이 있다.
+- 구조체의 초기화 함수를 `private`하게 만들지 않으면, 다른 파일이나 모듈에서 새로운 정적 함수나 변수를 더 구현할 수 있다.
+    - 이는 또한 API에 새로운 이벤트 분석 기능을 더한다던지, 하는 식으로 사용할 수 있다.
+- 열거형이 데이터를 더 섬세하게 다룬다.
+    - 사전 정의된 케이스만 쓸 수 있다는 점에서 그렇다.
+    - 이러한 섬세함은, 이벤트 이후에 추가적인 처리를 해야 할 경우 장점이 된다.
+- 구조체에서 정적 함수/변수로 정의된 일종의 "케이스"는, `private`할 수 있다.
+- 하지만 열거형 케이스는 반드시 해당 열거형과 같은 공개 범위를 지닌다.
+    - `private enum`의 모든 케이스는 `private`하다.
+- 열거형이 exhaustive해야 한다는 특성은, 빼먹고 처리하는 이벤트가 없게끔 한다.
+- 하지만 열거형에 케이스를 더한다는 것은 소스 코드 전체를 체크해야 하는 변화일 수 있다.
+- 반면 구조체에 새로운 이벤트 타입을 더하는 정적 함수를 얼마든지 더 만들 수 있으며, 다른 코드에 영향이 없다.
+    - 이러한 특성은 라이브러리를 만들 때 유용하다.
+
+## Drawing Parallels between Enums and Protocols
+- 열거형과 프로토콜은 꽤 흥미로운 공통점이 있다.
+- 열거형이 "~중 하나"의 관계를 나타내는 유일한 수단이 아니다! 프로토콜도 이렇게 쓰일 수 있다.
+- 위에서 썼던 "모양" 관련 열거형을 가져와 보면..
+```swift
+enum Shape {
+    case line(from: Point, to: Point)
+    case rectangle(origin: Point, width: Double, height: Double)
+    case circle(center: Point, radius: Double)
+}
+
+// 렌더링을 위한 확장
+extension Shape {
+    func render(into context: CGContext) {
+        switch self {
+        case let .line(from, to): // ...
+        case let .rectangle(origin, width, height): // ...
+        case let .circle(center, radius): // ...
+        }
+    }
+}
+
+// 동일한 구현을 프로토콜로
+protocol Shape {
+    func render(into context: CGContext)
+}
+
+struct Line: Shape {
+    var from: Point
+    var to: Point
+
+    func render(into context: CGContext) {
+        // ...
+    }
+}
+
+struct Rectangle: Shape {
+    var origin: Point
+    var width: Double
+    var height: Double
+
+    func render(into context: CGContext) {
+        // ...
+    }
+}
+```
+- 열거형 기반의 구현은 메서드로 묶인다.
+    - 하나의 메서드가 케이스별로 `switch`문을 통해 동작을 수행한다.
+- 프로토콜 기반의 구현은 케이스로 묶인다.
+    - 각각의 구현은 또한 각각의 케이스별로 특화된 렌더 메서드 구현을 가진다.
+- 이러한 차이점은 확장성 측면에서 중요하다.
+    - 열거형 구현은 새로운 메서드를 쉽게 더할 수 있다.
+    - 하지만 새로운 케이스를 더하는 것은 소스 코드 전체에 영향을 미칠 수 있다.
+    - 프로토콜 구현은 새로운 케이스를 쉽게 만들 수 있다. 타입을 만들고 채택만 하면 된다.
+    - 반면 새로운 기능을 가진 메서드를 추가하기는 어렵다. 프로토콜 정의 밖에서 새로운 함수를 더할 수 없기 때문.
+        - `extension`을 통한 방법이 있기는 하나, 많은 경우 "새로운 기능의 추가" 측면에서는 적합하지 않다.
+        - Dynamic Dispatch를 따르지 않기 때문에 그렇다.
+        - (주) 이러한 특성은 "특화된 메서드 제공" 측면에서 의미가 퇴색된다고 보여진다.
+- 열거형과 프로토콜 기반의 구현은 이렇게 각각 정확히 반대되는 장점과 단점이 있다.
+- 이러한 차이점은 또한 라이브러리를 만들 때, 어떤 측면에서 유저에게 확장성을 줄 지 결정하는 과정에서 고려된다.
+
+## Modeling Recursive Data Structures wwith Enums
+- 열거형이 재귀적인 데이터 모델을 만들기 정말 좋다는 사실 알고 계십니까?!
+    - 재귀적인 데이터 모델이라 함은, 자기 자신을 포함할 수 있는 데이터 타입을 말한다.
+    - HTML이나 XML같은 것이 그러하다.
+- `Node` 타입을 만들면서 생각해 보자..
+```swift
+enum Node: Hashable {
+    case text(String)
+    // indirect 키워드는 컴파일러가 해당 케이스를 참조 타입처럼 사용하게 한다.
+    // 이런 명시가 없다면, 이 열거형은 크기가 무한히 커질 것이다.
+    indirect case element(
+        name: String,
+        attributes: [String: String] = [:],
+        children: Node = .fragment([])
+    )
+    // (주) 여기서 쓰인 Fragment는 React의 그것과 비슷하다고 생각하면 된다고 한다.
+    case fragment([Node])
+}
+
+// 아래 코드는 <h1>Hello <em>World</em></h1>; 코드와 같은 모양을 나타낸다.
+let header: Node = .element(
+    name: "h1",
+    children: .fragment(
+        [
+            .text("Hello"),
+            .element(name: "em", children: .text("World"))
+        ]
+    )
+)
+
+// ExpressibleByArrayLiteral을 통해 fragment를 더 깔끔하게 만들 수 있다.
+extension Node: ExpressibleByArrayLiteral {
+    init(arrayLiteral elements: Node...) {
+        self = .fragment(elements)
+    }
+}
+
+// ExpressibleByStringLiteral을 채택하여 text를 더 쉽게 만들 수 있다.
+extension Node: ExpressibleByStringLiteral {
+    init(stringLiteral value: String) {
+        self = .text(value)
+    }
+}
+
+// element 케이스를 쉽게 만들기 위해 wrapper 메서드를 만든다.
+extension Node {
+    func wrapped(in elementName: String, attributes: [String: String] = [:]) -> Node {
+        .element(
+            name: elementName,
+            attributes: attributes,
+            children: self
+        )
+    }
+}
+
+// 상기 모든 확장을 적용하고 나면 같은 표현을 이렇게 쓸 수 있다.
+let contents: Node = [
+    "Hello",
+    ("World" as Node).wrapped(in: "em")
+]
+
+let headerAlt = contents.wrapped(in: "h1")
+
+// 더 예쁘고 세련되게 만들고 싶다면 앞에서 배운 result builder를 사용하는 방법도 있다.
+
+// 한편 enum의 mutating 함수를 이용하는 방법도 있다.
+extension Node {
+    mutating func wrap(in elementName: String, attributes: [String: String] = [:]) {
+        self = .element(name: elementName, attributes: attributes, children: self)
+    }
+}
+
+var greeting: Node = "Hello"
+greeting,wrap(in: "strong")
+```
+- Swift 열거형은 이것보다 더 추상적인 모델링도 할 수 있다.
+    - 연결 리스트, 이진 트리, ...
+- 그러나 Swift의 기본 내장 자료구조보다 대부분의 경우 성능이 떨어지는 건 어쩔 수 없다..
+
+### Indirect
+- 값 타입은 원래 자기 자신을 포함할 수 없다.
+    - 타입 크기를 계산할 때 무한히 커질 수 있기 때문.
+- 한편 컴파일러는 프로그램 컴파일 시점에 타입의 고정된/유한한 크기를 알아야 한다.
+- 참조는 일종의 우회를 한 단계 더한다. Indirect는 우회하다라는 뜻이니까..
+    - 컴파일러는 참조를 저장하는 저장소의 크기가 (64비트 시스템에서)항상 8바이트인 것을 안다.
+- 한편 위쪽에 `.fragment` 케이스에는 왜 `indirect` 키워드를 쓰지 않았을까? `[Node]` 타입을 연관값으로 포함함에도?
+    - 그것은 연관값이 어쨌든 배열이기 때문에, 정해진 크기를 갖기 때문이다. 
+    - 이 경우 실제로 메모리에서 배열이 차지하는 크기를 토대로 결정하게 된다.
+- `indirect` 구문은 열거형에서만 사용할 수 있다.
+- 만약 이것이 없다면, 클래스에서 우회 값을 박싱함으로써 수동으로 우회를.. 에이 하지 말자. 
+- 만약 최상위 레벨 fragment를 허용하지 않는 정책이라면, 이런 구현도 가능하다.
+```swift
+enum NodeAlt {
+    case text(String)
+    case element(
+        name: String,
+        attributes: [String: String] = [:],
+        children: [Node]
+    )
+}
+```
+- 열거형 자체도 `indirect enum`으로 선언할 수 있다.
+    - 이는 모든 케이스에 대해 `indirect`를 붙이는 것과 같다.
+- `indirect case`에 여러 연관값이 있을 경우, 참조는 그것들을 묶어서 참조한다.
+- 열거형의 크기는 가장 큰 케이스의 크기에 따라 결정된다.
+```swift
+enum TwoInts {
+    case nothing
+    case ints(Int, Int)
+}
+
+// 가장 큰 케이스(8바이트가 두개지요) + 태그를 저장할 1바이트
+MemoryLayout<TwoInts>.size // 17
+
+enum PairedInts {
+    case nothing
+    indirect case ints(Int, Int)
+}
+
+// "참조"에 배정된 크기는 8바이트
+// 하지만 태그 비트를 구겨넣을 남는 바이트 정도는 있다.
+MemoryLayout<PairedInts>.size // 8
+```
+- 특정 케이스의 크기를 줄이기 위해 `indirect`를 쓰고 싶을 지도 모른다.
+- 이론상으로 컴파일러는 여기에 `indirect`가 필요한지 아닌지 추론할 숭 ㅣㅆ다.
+- Swift에서는 그러나 그러지 않고, 직접 컨트롤하게끔 구현되어 있다.
+- 그리고 사실 컴파일러가 이를 합리적으로 추론하는 것도 쉬운 일은 아니다..
+    - 가령 제네릭한 연관값을 가지는 열거형에서 그 크기를 어떻게 판단할지는 어려운 일이다.

@@ -672,3 +672,201 @@ MemoryLayout<PairedInts>.size // 8
 - Swift에서는 그러나 그러지 않고, 직접 컨트롤하게끔 구현되어 있다.
 - 그리고 사실 컴파일러가 이를 합리적으로 추론하는 것도 쉬운 일은 아니다..
     - 가령 제네릭한 연관값을 가지는 열거형에서 그 크기를 어떻게 판단할지는 어려운 일이다.
+
+# Raw Values
+- 열거형에 있는 케이스들을 뭔가 다른 값과 연동시키고 싶을 때가 있다.
+- C나 Obj-C의 열거형은 기본적으로 이렇게 작동하는데, 사실 까보면 열거형 케이스는 숫자의 alias다.
+- Swift 열거형의 케이스는 그렇지 않지만, 원한다면 하나하나 뭔가 다른 값을 매칭시켜줄 수 있다.
+- 이것을 Raw Value(원시값)라고 한다.
+- 역발상! C API와 상호작용할 때 유용할 수 있는 기능이다.
+- 혹은 열거형을 JSON과 같은 데이터 포맷으로 인코딩하고자 할 때 유용하다.
+- 열거형에 원시값을 추가하면, 열거형 타입과 별개로 원시값 타입 또한 추가된다.
+```swift
+enum HTTPStatusCode: Int {
+    case ok = 200
+    case created = 201
+    // and so on...
+}
+```
+- (일단 적용했다면) 열거형의 모든 케이스는 고유한 원시값을 가져야 한다.
+
+## The `RawRepresentable` Protocol
+- 원시값을 통해 나타낼 수 있는 타입은 두 개의 API를 새로 얻는다.
+    - `rawValue` 프로퍼티
+    - 실패 가능한 `init?(rawValue:)` 초기화 함수
+- 열거형에 원시값을 적용했다면, 컴파일러는 이 두 가지를 자동으로 구현한다.
+- 초기화 함수가 실패 가능한 이유는, 케이스와 매칭이 안 되는 원시값이 들어올 수도 있기 때문이다.
+
+## Manual RawRepresentable Conformance
+- 원시값의 타입은 `String`, `Character`, 혹은 숫자 타입만 일단은 가능하다.
+- "일단은". 만약 직접 상기한 두 가지를 구현한다면, 다른 타입이더라도 `RawRepresentable`을 채택할 수 있다.
+    - 사실 컴파일러가 자동으로 구현해주는 것도 일종의 문법적 설탕일 뿐!!
+- 아래 예시에서는 원래 원시값으로 지원되지 않는 `(Int, Int)` 튜플 타입을 써 볼 거다.
+```swift
+enum AnchorPoint {
+    case center
+    case topLeft
+    case topRight
+    case bottomLeft
+    case bottomRight
+}
+
+extension AnchorPoint: RawRepresentable {
+    typealias RawValue = (x: Int, y: Int)
+
+    var rawValue: (x: Int, y: Int) {
+        switch self {
+        case .center: return (0, 0)
+        case .topLeft: return (-1, 1)
+        case .topRight: return (1, 1)
+        case .bottomLeft: return (-1, -1)
+        case .bottomRight: return (1, -1)
+        }
+    }
+
+    init?(rawValue: (x: Int, y: Int)) {
+        switch rawValue {
+        case (0, 0): self = .center
+        case (-1, 1): self = .topLeft
+        case (1, 1): self = .topRight
+        case (-1, -1): self = .bottomLeft
+        case (1, -1): self = .bottomRight
+        default: return nil
+        }
+    }
+}
+
+AnchorPoint.topLeft.rawValue // (x: -1, y: 1)
+AnchorPoint(rawValue: (x: 0, y: 0)) // Optional(AnchorPoint.center)
+```
+- 사실 위와 같은 모양의 코드가, 컴파일러가 자동으로 만들어 주는 코드와 정확히 같다.
+- 한편 이렇게 커스텀하게 원시값을 정해줄 때, "같은 원시값 문제"에 대해 주의해야 한다.
+- 원래 모든 케이스는 "고유한" 원시값을 가져야 한다는 것을 기억하는지?
+- 하지만 이렇게 직접 구현하면 같은 원시값을 가져도 컴파일러가 에러를 뱉지 않는다.
+- 물론 하위호환을 위해 다른 케이스에 같은 원시값을 할당해야 하는 케이스도 있을 수 있지만, 이건 예외!
+- 그렇기 때문에 직접 구현한다면 원시값을 다루는 데 신경쓰자.
+
+# `RawRepresentable` for Structs and Classes
+- `RawRepresentable`이 열거형에서만 쓸 수 있는게 아닌 거 아십니가?
+- 간단히 감싸는 타입을 만들면서 타입 안전성을 보장하고자 할 때 유용하다.
+- 가령, 유저 아이디를 `UserID` 타입으로 정의해 관리함으로써 다른 `String` 타입과의 혼동을 방지할 수 있다.
+```swift
+struct UserID: RawRepresentable {
+    var rawValue: String
+}
+```
+- `rawValue` 프로퍼티는 만족했는데, `init?(rawValue:)`는 어디갔지?
+- Swift 구조체의 memberwise initializer 자동 생성 기능으로 인해 생성이 된다!
+    - 그리고 컴파일러는 이 경우 `init`이 failable initializer가 아닌 것도 파악을 한다.
+- 그럼에도 불구하고 failable한 `init?(rawValue:)` 함수가 필요하면, 마찬가지로 직접 구현하면 된다.
+    - 모든 문자열이 유효한 유저 아이디가 아닐 수도 있으니까..
+
+## Internal Representation of Raw Values
+- 몇몇 추가 기능을 제외하면, 원시값이 있는 열거형은 그냥 얼거형이랑 다를 게 없다.
+- C와는 다르게, Swift 열거형은 타입을 보존한다. 열거형이 가질 수 있는 "값"은 케이스 뿐이다.
+- 마찬가지로 원시값에 접근할 수 있는 수단은 상술한 두 가지 API 뿐이다.
+```swift
+enum MenuItem: String {
+    case undo = "Undo"
+    case cut = "Cut"
+    case copy = "Copy"
+    case paste = "Paste"
+}
+
+// 단지 케이스 태그를 저장할 바이트만이 필요할 뿐
+MemoryLayout<MenuItem>.size // 1
+```
+- 열거형은 원시값을 내부적으로 저장하지 않고, 연산 프로퍼티처럼 동작한다.
+
+# Enumerating Enum Cases
+- 열거형의 모든 케이스를 가지고 있는 컬렉션이 있으면 순회나 카운팅에 유용하지 않을까?
+- 이를 위해 안배된 `CaseIterable` 프로토콜!
+- 구현은 대략 아래와 같다.
+```swift
+protocol CaseIterable {
+    associatedtype AllCases: Collection where AllCases.Element == Self
+
+    static var allCases: AllCases { get }
+}
+```
+- 연관값이 없는 열거형이라면, 컴파일러는 `CaseIterable`의 채택만으로도 위 구현을 자동으로 수행한다.
+```swift
+enum MenuItem: String, CaseIterable {
+    case undo = "Undo"
+    case cut = "Cut"
+    case copy = "Copy"
+    case paste = "Paste"
+}
+
+MenuItem.allCases // [MenuItem.undo, MenuItem.cut, MenuItem.copy, MenuItem.paste]
+```
+- `allCases` 프로퍼티는 `Collection`이므로, 배열이나 다른 컬렉션에서 쓸 수 있는 유용한 기능을 쓸 수 있다.
+- 컴파일러가 자동 생성해주는 코드가 갖는 이점이 있다면..
+    - 코드의 변경에 따라 항상 최신 상태로 유지된다는 것!
+- `CaseIterable` 문서에 따르면, 케이스의 선언 순서대로 반환할 것을 보장한다고 한다.
+
+## Manual `CaseIterable` Conformance
+- 연관값이 있는 열거형은 이론상 무한한 경우의 수가 있기 때문에 `CaseIterable`을 기본적으론 못 쓴다.
+- 하지만 몇몇 타입은 직접 구현할 수 있다! 심지어 구조체나 클래스일 때도 그렇다.
+```swift
+extension Bool: CaseIterable {
+    public static var allCases: [Bool] {
+        return [false, true]
+    }
+}
+
+extension UInt8: CaseIterable {
+    // 꼭 배열이 아니고, 어떤 Collection이더라도 가능하다!
+    // ClosedRange 또한 Collection을 충족한다.
+    public static var allCases: ClosedRange<UInt8> {
+        return .min ... .max
+    }
+}
+
+UInt8.allCases.count // 256
+```
+- `CaseIterable`을 경우의 수가 많거나 연산이 많이 필요한 타입에 적용하려면...
+    - `allCases`를 `lazy` 프로퍼티로 만들어 실제 연산을 호출 시점까지 미뤄 보자.
+- 상기 두 가지 예시는, 내가 own하지 않는 타입에 내가 own하지 않는 프로토콜을 적용하지 말라는 법칙과 어긋나긴 한다.
+    - `Bool`도 `UInt8`도 Swift 기본 타입이고, `CaseIterable`도 기본 프로토콜이라 소유권이 없다.
+    - 무슨 부작용이 일어날지 모른단 얘기.
+
+# Frozen and Non-Frozen Enums
+- 열거형의 장점 중 하나는 처리의 완전성(Exhaustiveness)의 보장이 강요된다는 것이다.
+- 그러나 이것은 컴파일 타임에 모든 케이스에 대해 컴파일러가 알아야지만 가능하다. 대부분 가능하지만..
+- 열거형 타입인데, 인터페이스 이외의 내용물은 바이너리로 제공되는 (은닉화된)타입이 있다.
+    - Swift Foundation을 위시한 퍼스트 파티 프레임워크 혹은 라이브러리
+    - 네이버 지도처럼 서드 파티 라이브러리 중 오픈 소스가 아닌 것들
+- 이러한 라이브러리들이 업데이트됨으로써, 이전 버전에는 없던 케이스가 생긴다면?
+    - 핸들링이 불가능하므로 크래시가 날 것이다.
+- 이렇듯, 미래에 케이스가 추가될 수도 있는 열거형을 non-frozen enum이라고 부른다.
+    - 이 경우 미래에 추가될 수도 있는 케이스를 위해 반드시 `default` 분기를 작성해야 한다.
+```swift
+switch error {
+    // previous implementation...
+    case .dataCorrupted:
+        // do something...
+    @unknown default: 
+        // handle unknown cases...
+}
+```
+- `@unknown default`는 런타임에는 그냥 `default`랑 똑같이 작동한다.
+- 하지만 한편 컴파일러에게 "컴파일 타임에 파악하지 못한 케이스에 대해서만 써라" 라는 메시지를 남기는 것과 같다.
+- 이를 통해 바이너리로 제공되는 열거형에도 처리의 완전성을 보장할 수 있다.
+    - 심지어 미래에 업데이트 될 새로운 라이브러리 인터페이스에도!
+    - 다만 컴파일 타임에 존재를 알았지만 커버되지 않는 케이스가 있다면, 업데이트하라는 컴파일러 경고가 뜨기는 할 거다.
+- `@frozen enum`과 그렇지 않은 열거형의 구분은, library evolution mode로 컴파일되었을 때만 의미가 부여된다.
+- library evolution mode는 기본적으로 비활성화되어 있다. `-enable-library-evolution` 컴파일러 플래그를 통해 활성화할 수 있다.
+    - 이것이 활성화된 라이브러리를 탄력적 라이브러리(resilient library)라고도 부른다.
+    - 탄력적 라이브러리는 기본적으로 바이너리로 제공되며 소스 코드는 숨겨져 있다.
+    - 이것이 활성화된 경우 라이브러리에 변화가 있더라도 ABI(Application Binary Interface)가 일정하게 유지된다.
+    - 이러한 특징 덕에, 각기 다른 Swift 버전에서 동일한 라이브러리를 쓸 수 있는 것이다.
+    - 애플 표준 라이브러리는 대개 그렇다.
+- 탄력적 라이브러리에 있는 열거형은 기본적으로는 non-frozen이다.
+- `@frozen` 애트리뷰트로 표시한 열거형은 frozen이다.
+    - 라이브러리 개발자가, "더 이상 케이스를 더하지 않겠다" 하고 약속한 것과 같다.
+    - 만약 그렇지 않다면(non-frozen이라면), 언제나 열거형을 처리할 때 `@unknown default`를 추가해야 한다.
+- 표준 라이브러리 중 `Optional`, `Result` 열거형이 `@frozen enum`이다.
+- 비 탄력적 라이브러리에 있는 열거형은 항상 frozen하다고 가정한다.
+    - Swift Package Manager 등을 통해 설치하는 대부분의 오픈 소스 라이브러리는 이렇다.
+    - 그렇기 때문에 `@unknown default`를 쓸 일이 없다.

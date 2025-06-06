@@ -870,3 +870,111 @@ switch error {
 - 비 탄력적 라이브러리에 있는 열거형은 항상 frozen하다고 가정한다.
     - Swift Package Manager 등을 통해 설치하는 대부분의 오픈 소스 라이브러리는 이렇다.
     - 그렇기 때문에 `@unknown default`를 쓸 일이 없다.
+
+# Tips and Tricks
+- 중첩된 열거형을 쓰지 말자. 여러 개의 값을 다룰 때는 튜플이 낫다.
+```swift
+let isImportant = true
+let isUrgent = true
+let priority: Int
+
+// 보기 안 좋다
+switch isImportant {
+case true:
+    switch isUrgent {
+    case true:
+        priority = 4
+    // ...
+    }    
+
+// ...
+}
+
+// 대신 이렇게
+switch (isImportant, isUrgent) {
+case (true, true):
+    priority = 4
+// ...
+}
+```
+- 초기화 검사 기능을 잘 이용하자.
+    - 위 코드를 보면, `priority` 상수는 일단 정의되고, `switch`문에 따라 값이 할당된다.
+    - 만약 값을 올바르게 초기화하지 않았다면, 컴파일 에러가 뜰 것이다.
+    - 요즘 문법으로는 아래처럼 정의할 수도 있다.
+```swift
+let priority = switch (isImportant, isUrgent) {
+    // ...
+}
+```
+- `some`과 `none`을 케이스의 이름으로 사용하지 말자.
+    - 알다시피, `Optional`의 두 케이스 이름이다. 예기치 못한 충돌이 날 수도?
+- 예약어로 지정되어 있는 문구를 케이스 이름으로 쓰고 싶을 땐 백틱을 붙이자.
+```swift
+// default는 예약어이므로 원래 그냥은 케이스 이름으로 쓸 수 없다.
+// (주) 그냥 이런 이름은 케이스 이름으로 안 쓰면 안 되나?
+enum Strategy {
+    case custom
+    case `default`
+}
+```
+- 열거형 케이스는 팩토리 메서드처럼 사용할 수 있다.
+    - 열거형 케이스에 연관값이 있다면, 함수로 취급된다.
+```swift
+enum OpaqueColor {
+    case rgb(red: Float, green: Float, blue: Float)
+    case gray(intensity: Float)
+}
+
+// OpaqueColor.rgb는 열거형 케이스기도 하지만,
+// (red: Float, green: Float, blue: Float) -> OpaqueColor 타입의 함수이기도 하다.
+
+// 그래서 열거형 케이스를 map 같은 고차함수의 인자로 넘길 수 있다.
+let gradient = stride(from: 0.0, to: 1.0, by: 0.25)
+    .map(OpaqueColor.gray)
+
+// 또한 프로토콜 요구사항 메서드도 열거형 케이스로 충족할 수 있다.
+protocol ColorProtocol {
+    static func rgb(red: Float, green: Float, blue: Float) -> Self
+}
+
+// 그래서 별도의 코드를 더 구현할 필요가 없다.
+// rgb 케이스가 함수로 취급되기 때문
+extension OpaqueColor: ColorProtocol { }
+```
+- 연관값을 유사-저장 프로퍼티로 쓰지 말자. 구조체를 쓰자.
+    - 열거형은 저장 프로퍼티를 가질 수 없다.
+    - 저장 프로퍼티를 더하는 것은, 해당 타입의 연관값을 모든 케이스에 추가하는 것과 같다.
+```swift
+// 이렇게 짜는 것은 좋지 못한 예시
+enum OpaqueColor {
+    case rgb(red: Float, green: Float, blue: Float, alpha: Float)
+    case gray(intensity: Float, alpha: Float)
+}
+
+// 차라리 감싸는 타입을 만들자.
+// 열거형에서 공통된 프로퍼티가 있다면, 구조체로 감싸서 밖으로 빼는 걸 고려해 보자.
+struct OpaqueColorType {
+    let color: OpaqueColor
+    let alpha: Float
+}
+```
+- 연관값으로 너무 많은 것을 하려 들지 말자.
+    - 연관값이 쭉 튜플 원소로 늘어서 있는 케이스는 그다지 보기 좋지 않다.
+    - 때로는 별도의 구조체를 정의하는 것이 나을 수도 있다.
+- 케이스가 없는 열거형을 네임스페이스로 활용해 보자.
+    - Swift에는 별도의 네임스페이스가 없어서, 열거형을 임시로 써 볼 수 있다.
+    - 케이스를 갖지 않는 열거형은 인스턴스가 될 수 없기 때문이다. 대표적으로 `Never`.
+```swift
+// 네임스페이스의 완벽한 대안은 아니긴 하지만..
+enum BaseURL {
+    static let testServer = "테스트용 서버 URL"
+    static let serviceServer = "실서버 URL"
+    // ...
+}
+```
+
+# Recap
+- 열거형은 합 타입이다.
+- 열거형은 경우의 수가 범람해서 있을 수 없는 상태가 나오는 것을 막는 데 용이하다.
+- 섬세하게 설계하여, 해결하고자 하는 문제에 집중할 수 있다.
+- 불가능한 상태를 불가능하게 만드는 것이 가장 중요하다!!
